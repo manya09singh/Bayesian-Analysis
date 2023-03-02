@@ -1,0 +1,221 @@
+---
+title: "Intro Bayesian Analysis"
+author: "Manya Singh (22200990)"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      warning = FALSE, message = FALSE, error = FALSE)
+library(dplyr); library(tidyr); library(ggplot2); library(ggthemes); library(HDInterval)
+theme_set(theme_tufte(base_family = 'sans'))
+
+knitr::opts_chunk$set(echo = TRUE)
+library(rstan)
+rstan_options(auto_write = TRUE)
+options(mc.cores = 4)
+library(bayesplot)
+set.seed(2835)
+```
+
+### 1. Finding $\theta$
+#### The probabilty of a person voting Yes for Local Property Tax
+
+We know that the sample data shows that 68 people answered No and 32 people answered yes
+```{r part_1a}
+#possible range of values for theta1 in the distribution
+df1 <- data.frame(theta = seq(0.150, 0.450, 0.001)) 
+
+y <- 32 # no. of people that said yes
+n <- 32+68 # no. of people that said no
+
+#the beta distribution modelling this sample data
+df1$p <- dbeta(df1$theta, y+1, n-y+1)
+```
+
+
+```{r part1_b}
+#defining the 80% interval
+df2 <- data.frame(theta = seq(qbeta(0.1, y+1, n-y+1), qbeta(0.9, y+1, n-y+1), length.out = 100))
+
+# compute the posterior density
+df2$p <- dbeta(df2$theta, y+1, n-y+1)
+```
+
+
+```{r part1_c}
+#Plotting the exact distribution of observed data
+
+library(ggplot2)
+ggplot(mapping = aes(theta, p)) +
+  geom_line(data = df1) +
+  # Add a layer of colorized 80% posterior interval
+  geom_area(data = df2, aes(fill='1')) +
+  # Adding the population percentage of voters who said yes (0.4 or 2/5)
+  geom_vline(xintercept = 0.4, linetype='dotted') +
+  labs(title='Uniform prior -> Posterior is Beta(33,69)', y = '') +
+  scale_y_continuous(expand = c(0, 0.1), breaks = NULL) +
+  scale_fill_manual(values = 'lightblue', labels = '80% posterior interval') +
+  theme(legend.position = 'bottom', legend.title = element_blank())
+```
+
+```{r part_1d}
+#Credible interval using HDI for theta based on the beta distribution
+theta1_hdi1 = HDInterval::hdi(df1$theta, credMass=0.8)[1:2]
+theta1_hdi1
+```
+
+
+```{r part1_e}
+#plotting the mcmc approximated data
+
+#using a mcmc approximation of 200 samples
+y_beta = rbeta(200,y+1, n-y+1)
+draws <- as.data.frame(y_beta)
+mcmc_hist(draws, pars = "y_beta")
+
+```
+
+```{r part_1f}
+#credible interval for theta based on MCMC approximation of the samples
+theta1_hdi = HDInterval::hdi(y_beta, credMass=0.8)[1:2]
+theta1_hdi[1:2]
+
+```
+The 90 percent credible interval for the observed data is seen to be (`r round(theta1_hdi1[1],4)`,`r round(theta1_hdi1[2],4)`)
+
+and that of the MCMC sampled data is (`r round(theta1_hdi[1],4)`,`r round(theta1_hdi[2],4)`)
+
+The MCMC approximated interval is quite close to the credible interval of theta1. This means that the beta distribution is well capturing the observed data.
+
+
+
+### 2. Finding the odds of $\theta$
+#### Using Monte Carlo approximations
+
+```{r part2a}
+#using a monte carlo approximation of theta
+theta <- rbeta(200,y+1,n-y+1)
+
+# phi is the odds of theta
+phi = (1-theta)/theta
+
+#the 90% credible interval of the odds of theta
+quantiles <- c(0.10, 0.90)
+thetaq <- quantile(theta, quantiles)
+phiq <- quantile(phi, quantiles)
+phiq
+```
+
+
+```{r part2b}
+
+df1 <- data.frame(phi,theta) %>% gather()
+
+# merge quantiles into one data frame for plotting
+df2 <- data.frame(phi = phiq, theta = thetaq) %>% gather()
+ggplot() +
+  geom_histogram(data = df1, aes(value), bins = 30) +
+  geom_vline(data = df2, aes(xintercept = value), linetype = 'dotted') +
+  facet_wrap(~key, ncol = 1, scales = 'free_x')  +
+  labs(x = '', y = '') +
+  scale_y_continuous(breaks = NULL)
+
+
+```
+Taking the population average value of theta as 0.4 or (2/5), we get the value of phi to be 1.5
+
+And, from the 90% Credible Interval of the odds of theta1 (phi) we see that it begins after 1.5.
+
+Therefore it is highly likely that the value of phi is greater than 1.5 and lies inside the calculated interval.
+
+### 3. Finding the odds.ratio
+#### Cannabis Poll vs Local Property Tax poll
+
+```{r part3a}
+y2 = 61 # no. of people who voted yes
+n2 = 150# no. of people who voted no
+
+#Using a MCMC approximated distribution for theta2 of 200 samples
+theta2 = rbeta(200, y2+1, n2-y2+1)
+
+phi2 = (1-theta2)/theta2
+
+odds.ratio = phi/phi2
+
+ggplot() +
+  geom_density(aes(odds.ratio)) + 
+  geom_vline(xintercept = , linetype='dotted') +
+  labs(x="odds.ratio")
+```
+
+
+```{r part3b}
+#using a 90% credible interval
+or_hdi = HDInterval::hdi(odds.ratio, credMass=0.9)[1:2]
+or_hdi
+```
+the population average value of theta2 is also 0.4, therefore the odds phi2 will be 1.5
+
+
+This means that the odds.ratio would be equal to 1.
+
+
+In the case of the odds.ratio being equal to 1, it can be said that the two polls are not associated to each other, and do not affect it's results.
+
+
+The 90% credible interval is quite a large range, and suggests that the odds.ratio could be less than 1, equal to one or even greater than 1.
+Therefore we can't conclude anything about the association between the Local Property Tax Poll and the Cannabis poll results.
+
+
+### 4. Finding probability that $\theta1$ > $\theta2$
+
+```{r part4a}
+
+#probability of theta1 being greater than theta2
+likelihood <- theta>theta2
+
+#MCMC approximate value of the probability that theta1 is greater than theta2
+greater_p = mean(likelihood)
+greater_p
+
+```
+there is a `r (greater_p*100)`% chance that $\theta1$ is greater than $\theta2$.
+
+
+This  suggests that the probability of someone voting "Yes" in the Local Property Tax is much lesser than the probability of someone voting "for" decriminalizing cannabis.
+
+
+### 5. Using Stan to calculate the odds.ratio
+#### repeating part 3
+```{r part5a}
+d_bin2 <- list(N1 = 100, y1 = 32, N2 = 150, y2 = 61)
+fit_bin2 <- stan(file = "oddsratio.stan", data = d_bin2, seed = 1234)
+model = monitor(fit_bin2, probs = c(0.1, 0.5, 0.9))
+or_stan_l = model$`10%`[3]
+or_stan_h = model$`90%`[3]
+
+```
+
+
+```{r part5b}
+draws <- as.data.frame(fit_bin2)
+mcmc_hist(draws, pars = 'oddsratio') +
+  geom_vline(xintercept = 1) +
+  scale_x_continuous(breaks = c(seq(0.25,1.5,by=0.25)))
+```
+
+Here using stan to generate the odds.ratio, we see the 90% credible interval is : `r round(or_stan_l,4)`, `r round(or_stan_h,4)`
+
+
+The odds.ratio value for the population parameters $\theta1$ and $\theta2$ would be 1. Since the mean value for both the samples of both polls is 0.4. Hence the intervals should suggest ideally a value around 1.
+
+
+This 90% credible interval using MCMC approximation for odds.ratio is :  `r round(or_hdi[1],4)`, `r round(or_hdi[2],4)`
+
+
+This interval is much larger than the one calculated using Stan. Hence the interval calculated by stan is much more precise, and is a better option to use.
+
+The 90% credible interval calculated using stan gives an upper and lower limit value that lies below 1. This suggests that the Local Property Tax and Cannabis Polls are two events that have no association with one another and the odds of one, do not affect the odds of the other.
+
