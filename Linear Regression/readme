@@ -1,0 +1,4 @@
+This R-markdown is divided into three parts : 
+1. Predicts the posterior mean heights for a given set of weights
+2. Gives the estimated 90% credible interval for the posterior mean as well as the predicted height.
+3. Gives the estimated 90% credible interval for posterior mean and predicted heights but using logarithmic relationship between weight and height
